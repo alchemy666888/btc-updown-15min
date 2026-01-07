@@ -1,4 +1,5 @@
 import WebSocket from 'ws';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 import { MarketStateManager } from './market-state';
 import { WSMessage, BestBidAsk, LastTradePrice } from './types';
 import { printConnectionStatus, printDashboard } from './display';
@@ -7,6 +8,10 @@ const WS_URL = 'wss://ws-subscriptions-clob.polymarket.com/ws/market';
 const PING_INTERVAL = 10000; // 10 seconds
 const RECONNECT_BASE_DELAY = 1000; // 1 second
 const RECONNECT_MAX_DELAY = 30000; // 30 seconds
+
+// Configure proxy agent if needed
+const proxyUrl = process.env.https_proxy || process.env.HTTPS_PROXY;
+const wsAgent = proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined;
 
 export class PolymarketWebSocket {
   private ws: WebSocket | null = null;
@@ -36,7 +41,13 @@ export class PolymarketWebSocket {
     printConnectionStatus('connecting', WS_URL);
 
     try {
-      this.ws = new WebSocket(WS_URL);
+      // Create WebSocket with proxy agent if configured
+      const options: WebSocket.ClientOptions = {};
+      if (wsAgent) {
+        options.agent = wsAgent;
+      }
+
+      this.ws = new WebSocket(WS_URL, options);
 
       this.ws.on('open', () => this.handleOpen());
       this.ws.on('message', (data: WebSocket.Data) => this.handleMessage(data));

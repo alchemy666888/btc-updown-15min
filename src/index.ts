@@ -32,23 +32,31 @@ async function main() {
   const assetIds: string[] = [];
 
   if (current) {
-    console.log(`📈 Current Market: ${current.question}`);
-    console.log(`   Outcomes: ${current.outcomes.join(', ')}`);
-    console.log(`   Ends: ${new Date(current.endDate).toLocaleString()}`);
-    console.log(`   Asset IDs: ${current.clobTokenIds.join(', ')}\n`);
+    console.log(`📈 Current Market: ${current.question || 'Unknown'}`);
+    console.log(`   Outcomes: ${current.outcomes ? current.outcomes.join(', ') : 'N/A'}`);
+    console.log(`   Ends: ${current.endDate ? new Date(current.endDate).toLocaleString() : 'N/A'}`);
+    console.log(`   Asset IDs: ${current.clobTokenIds ? current.clobTokenIds.join(', ') : 'N/A'}\n`);
 
-    stateManager.initializeMarket(current, 'CURRENT');
-    assetIds.push(...current.clobTokenIds);
+    if (current.outcomes && current.clobTokenIds && current.outcomes.length > 0) {
+      stateManager.initializeMarket(current, 'CURRENT');
+      assetIds.push(...current.clobTokenIds);
+    } else {
+      console.error('⚠️  Current market is missing required fields, skipping...\n');
+    }
   }
 
   if (next) {
-    console.log(`📈 Next Market: ${next.question}`);
-    console.log(`   Outcomes: ${next.outcomes.join(', ')}`);
-    console.log(`   Ends: ${new Date(next.endDate).toLocaleString()}`);
-    console.log(`   Asset IDs: ${next.clobTokenIds.join(', ')}\n`);
+    console.log(`📈 Next Market: ${next.question || 'Unknown'}`);
+    console.log(`   Outcomes: ${next.outcomes ? next.outcomes.join(', ') : 'N/A'}`);
+    console.log(`   Ends: ${next.endDate ? new Date(next.endDate).toLocaleString() : 'N/A'}`);
+    console.log(`   Asset IDs: ${next.clobTokenIds ? next.clobTokenIds.join(', ') : 'N/A'}\n`);
 
-    stateManager.initializeMarket(next, 'NEXT');
-    assetIds.push(...next.clobTokenIds);
+    if (next.outcomes && next.clobTokenIds && next.outcomes.length > 0) {
+      stateManager.initializeMarket(next, 'NEXT');
+      assetIds.push(...next.clobTokenIds);
+    } else {
+      console.error('⚠️  Next market is missing required fields, skipping...\n');
+    }
   }
 
   // Step 3: Connect to WebSocket
@@ -81,6 +89,13 @@ async function main() {
     wsClient.close();
     process.exit(0);
   });
+
+  // Check if we have any valid markets to monitor
+  if (assetIds.length === 0) {
+    console.error('❌ No valid markets with asset IDs found!');
+    console.log('Cannot proceed without asset IDs to subscribe to.\n');
+    process.exit(1);
+  }
 
   // Connect and subscribe
   wsClient.connect();
