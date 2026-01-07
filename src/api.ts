@@ -1,7 +1,12 @@
-import axios, { AxiosError } from 'axios';
 import { Market, MarketResponse } from './types';
+import { fetchJSON } from './http-client';
 
 const GAMMA_API_BASE = 'https://gamma-api.polymarket.com';
+
+if (process.env.https_proxy || process.env.HTTPS_PROXY) {
+  const proxyUrl = process.env.https_proxy || process.env.HTTPS_PROXY;
+  console.log(`Using proxy: ${proxyUrl?.split('@')[1] || 'configured'}`);
+}
 
 /**
  * Generate slug for BTC 15m market based on timestamp
@@ -33,23 +38,45 @@ export function get15MinIntervals(): { current: number; next: number } {
  */
 export async function getMarketBySlug(slug: string): Promise<Market | null> {
   try {
-    const response = await axios.get<MarketResponse>(
-      `${GAMMA_API_BASE}/events/slug/${slug}`
-    );
+    const url = `${GAMMA_API_BASE}/events/slug/${slug}`;
+    const data = await fetchJSON<any>(url);
 
-    if (response.data) {
-      return response.data;
+    if (data && data.markets && data.markets.length > 0) {
+      const marketData = data.markets[0];
+
+      // Parse JSON strings to arrays
+      const outcomes = JSON.parse(marketData.outcomes);
+      const outcomePrices = JSON.parse(marketData.outcomePrices);
+      const clobTokenIds = JSON.parse(marketData.clobTokenIds);
+
+      const market: Market = {
+        id: data.id,
+        question: data.title || marketData.question,
+        slug: data.slug,
+        outcomes,
+        outcomePrices,
+        clobTokenIds,
+        active: data.active,
+        closed: data.closed,
+        endDate: data.endDate,
+        volume: data.volume?.toString() || '0'
+      };
+
+      console.log(`✓ Loaded market: ${market.question}`);
+      console.log(`  Outcomes: ${outcomes.join(', ')}`);
+      console.log(`  Asset IDs: ${clobTokenIds.length} token(s)`);
+
+      return market;
     }
 
     return null;
   } catch (error) {
-    if (axios.isAxiosError(error)) {
-      const axiosError = error as AxiosError;
-      if (axiosError.response?.status === 404) {
+    if (error instanceof Error) {
+      if (error.message.includes('404')) {
         console.log(`Market not found: ${slug}`);
         return null;
       }
-      console.error(`API Error for ${slug}:`, axiosError.message);
+      console.error(`API Error for ${slug}:`, error.message);
     } else {
       console.error(`Unknown error fetching ${slug}:`, error);
     }
@@ -62,17 +89,11 @@ export async function getMarketBySlug(slug: string): Promise<Market | null> {
  */
 export async function searchBTCMarkets(): Promise<Market[]> {
   try {
-    const response = await axios.get(`${GAMMA_API_BASE}/events`, {
-      params: {
-        active: true,
-        archived: false,
-        closed: false,
-        limit: 50
-      }
-    });
+    const url = `${GAMMA_API_BASE}/events?active=true&archived=false&closed=false&limit=50`;
+    const data = await fetchJSON<Market[]>(url);
 
-    if (response.data && Array.isArray(response.data)) {
-      return response.data.filter((market: Market) =>
+    if (data && Array.isArray(data)) {
+      return data.filter((market: Market) =>
         market.slug.includes('btc') && market.slug.includes('updown-15m')
       );
     }
